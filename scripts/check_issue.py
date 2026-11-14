@@ -136,7 +136,7 @@ def main() -> int:
         number = str(issue["number"])
         comments = [c["body"] for c in issue["comments"]]
 
-    if state != "open":
+    if state.lower() != "open":
         print(f"issue #{number}: {state}, nothing to do")
         return 0
     if not is_ban_request(title, labels):
