@@ -1,0 +1,31 @@
+name: issue check
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Номер issue для проверки
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-check-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: true
+
+jobs:
+  duplicates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Close the issue if the entry is already listed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+        run: python3 scripts/check_issue.py "$ISSUE_NUMBER"
