@@ -11,6 +11,9 @@ Usage:
 
 CSV layout: one column `entry` (Telegram ID or email), same order as the txt,
 no comments, no BOM, LF line endings.
+
+Both a malformed line and a repeated entry abort the export with the offending
+line number, so a broken txt can never turn into a silently wrong csv.
 """
 
 from __future__ import annotations
@@ -31,19 +34,30 @@ HEAD_RE = re.compile(r"[\s#]")
 
 
 def parse(text: str) -> list[str]:
-    """Leading token of every non-comment line; the reason after `#` is dropped."""
+    """Leading token of every non-comment line; the reason after `#` is dropped.
+
+    A duplicate is an error, not a row: `blacklist.csv` must not repeat an
+    entry just because `blacklist.txt` does.
+    """
     entries: list[str] = []
+    first_seen: dict[str, int] = {}
     for lineno, line in enumerate(text.splitlines(), 1):
         s = line.strip()
         if not s or s.startswith("#"):
             continue
         value = HEAD_RE.split(s, 1)[0].strip()
         if value.isascii() and value.isdigit():
-            entries.append(str(int(value)))
+            entry = str(int(value))
         elif EMAIL_RE.fullmatch(value.lower()):
-            entries.append(value.lower())
+            entry = value.lower()
         else:
             raise SystemExit(f"blacklist.txt:{lineno}: not a Telegram ID or email: {value!r}")
+        if entry in first_seen:
+            raise SystemExit(
+                f"blacklist.txt:{lineno}: duplicate of line {first_seen[entry]}: {entry}"
+            )
+        first_seen[entry] = lineno
+        entries.append(entry)
     return entries
 
 
