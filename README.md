@@ -24,6 +24,14 @@ Raw-ссылка для автоматического подтягивания 
 https://raw.githubusercontent.com/remnashop/blacklist/main/blacklist.txt
 ```
 
+Тот же список без комментариев — [`blacklist.csv`](blacklist.csv): одна колонка `entry` (Telegram ID или email), без `#`, без BOM, для панелей и скриптов, которые не умеют разбирать комментарии:
+
+```
+https://raw.githubusercontent.com/remnashop/blacklist/main/blacklist.csv
+```
+
+`blacklist.csv` руками не правится: он собирается из `blacklist.txt` скриптом `scripts/export_csv.py`, а workflow `export` пересобирает его при каждом изменении txt и коммитит результат. На pull request тот же скрипт запускается с `--check` и падает, если CSV разъехался с txt.
+
 ## Как добавить нарушителя
 
 Через [форму заявки](../../issues/new?template=blacklist.yml): числовой Telegram ID или email, причина и доказательства. Без пруфов заявку не рассматриваем.

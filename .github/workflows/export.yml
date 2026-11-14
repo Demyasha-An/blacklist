@@ -1,0 +1,46 @@
+name: export
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - blacklist.txt
+      - scripts/export_csv.py
+      - .github/workflows/export.yml
+  pull_request:
+    paths:
+      - blacklist.txt
+      - blacklist.csv
+      - scripts/export_csv.py
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: export-csv
+  cancel-in-progress: true
+
+jobs:
+  csv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Regenerate blacklist.csv from blacklist.txt
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 scripts/export_csv.py --check
+          else
+            python3 scripts/export_csv.py
+          fi
+
+      - name: Commit blacklist.csv if it changed
+        if: github.event_name != 'pull_request'
+        run: |
+          git diff --quiet -- blacklist.csv && { echo "blacklist.csv is up to date"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add blacklist.csv
+          git commit -m "Export blacklist.csv from blacklist.txt"
+          git push
