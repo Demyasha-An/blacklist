@@ -11,6 +11,7 @@
 | [`scripts/add_ban.py`](scripts/add_ban.py) | вставка записи на нужное место, `--check`, `--sync`, `--selftest` | — |
 | [`scripts/export_csv.py`](scripts/export_csv.py) | сборка csv из txt | — |
 | [`scripts/entries_badge.py`](scripts/entries_badge.py) | счётчик для бейджа в README | — |
+| [`scripts/check_issue.py`](scripts/check_issue.py) | проверка заявки: закрыть, если адрес уже в списке | — |
 | [`scripts/sources.txt`](scripts/sources.txt) | внешние списки для `--sync` | да |
 | [`badges/entries.json`](badges/entries.json) | цифра для endpoint-бейджа shields | нет, генерируется |
 | [`.github/workflows/`](.github/workflows) | `check`, `export`, `sync` | да |
@@ -82,6 +83,18 @@ blacklist.txt:3: duplicate of line 2: 2593769
 
 Считает строки в `blacklist.csv` и переписывает `badges/entries.json` (endpoint-бейдж shields). Запускается workflow `export` после сборки csv, руками не нужен.
 
+### `check_issue.py` — закрыть дубль заявки
+
+Берёт из заявки поле «Telegram ID или email», нормализует так же, как список (`0002593769` = `2593769`, email в нижнем регистре), и если адрес уже есть — комментирует причиной из `blacklist.txt` и закрывает issue как `not planned`. Обработчик — workflow `issue check`, прав на запись к содержимому у него нет.
+
+Не трогает:
+
+- issue без заголовка `[BAN]` и без метки `blacklist` — то есть всё, что открыто не через форму;
+- обращения со словами «апелляция», «ошибочно», «разбан», «неверно» — их разбирает человек;
+- заявки без распознанного ID или email.
+
+Ручной перезапуск: `gh workflow run issue-check.yml -f issue_number=42`. Локально — `python3 scripts/check_issue.py 42 --dry-run` (ничего не пишет) или `--body-file body.md --title "[BAN] …"` для офлайн-проверки.
+
 ### `sources.txt` и `sync`
 
 В `scripts/sources.txt` — URL внешних списков, по одному на строку. Workflow `Sync` раз в неделю (понедельник, 05:00 UTC) и по кнопке прогоняет `add_ban.py --sync` по каждому адресу и открывает PR из ветки `sync/upstream`. Причины у таких записей — от источника, перед мержем их стоит просмотреть.
@@ -94,6 +107,7 @@ blacklist.txt:3: duplicate of line 2: 2593769
 | `export` | push в `main` (txt или скрипты) | пересобирает `blacklist.csv` и `badges/entries.json`, коммитит ботом, если что-то изменилось |
 | `export` | PR (txt, csv, скрипты) | только `export_csv.py --check`, файлы не пишет |
 | `Sync` | по расписанию и вручную | массовый импорт, PR из `sync/upstream` |
+| `issue check` | открытие, правка, переоткрытие issue | закрывает заявку, если адрес уже в списке |
 
 Схема:
 
