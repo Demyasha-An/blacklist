@@ -11,6 +11,19 @@ from pathlib import Path
 BLACKLIST = Path(__file__).resolve().parent.parent / "blacklist.txt"
 EMAIL_RE = re.compile(r"[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+")
 
+# Платформа, а не нарушители: служебные аккаунты Telegram и его боты.
+RESERVED_IDS = {777000, 1087968824, 93372553, 136817688}
+# Пользовательские ID Telegram укладываются в 10^10; всё больше — мусор из чужих списков.
+MAX_TELEGRAM_ID = 10**10
+
+
+def is_bannable(key: tuple[int, int | str]) -> bool:
+    """Reject entries that cannot be an offender, whatever an outside list claims."""
+    kind, value = key
+    if kind != 0:
+        return True
+    return 0 < value < MAX_TELEGRAM_ID and value not in RESERVED_IDS
+
 
 def entry_key(value: str) -> tuple[int, int | str]:
     """Sort key: Telegram IDs ascending first, then emails alphabetically."""
@@ -69,7 +82,7 @@ def strip_mentions(reason: str) -> str:
     return re.sub(r"\s+", " ", reason).strip()
 
 
-def parse_list(text: str) -> dict[tuple[int, int | str], str]:
+def parse_list(text: str, skipped: list[str] | None = None) -> dict[tuple[int, int | str], str]:
     """Parse an entry-per-line list (`entry` or `entry # reason`) into {key: reason}."""
     result = {}
     for line in text.splitlines():
@@ -80,6 +93,10 @@ def parse_list(text: str) -> dict[tuple[int, int | str], str]:
         try:
             key = entry_key(value)
         except ValueError:
+            continue
+        if not is_bannable(key):
+            if skipped is not None:
+                skipped.append(str(key[1]))
             continue
         result[key] = strip_mentions(reason.strip())
     return result
@@ -104,12 +121,15 @@ def merge_missing(
 def sync(url: str) -> None:
     with urllib.request.urlopen(url) as r:
         text = r.read().decode("utf-8")
-    other = parse_list(text)
+    skipped: list[str] = []
+    other = parse_list(text, skipped)
 
     lines = BLACKLIST.read_text(encoding="utf-8").splitlines(keepends=True)
     lines, added = merge_missing(lines, other)
     BLACKLIST.write_text("".join(lines), encoding="utf-8")
     print(f"added {added} entries from {len(other)} in source")
+    if skipped:
+        print(f"skipped {len(skipped)} not bannable: {', '.join(sorted(set(skipped)))}")
 
 
 def selftest() -> None:
@@ -147,6 +167,13 @@ def selftest() -> None:
         (1, "e@x.io"): "e",
     }
 
+    assert is_bannable((0, 12345)) and is_bannable((1, "a@x.io"))
+    for bad in ((0, 777000), (0, 1087968824), (0, 55610547115), (0, 0)):
+        assert not is_bannable(bad), bad
+    skipped: list[str] = []
+    assert parse_list("777000 # service\n55610547115 # junk\n42 # ok\n", skipped) == {(0, 42): "ok"}
+    assert skipped == ["777000", "55610547115"], skipped
+
     merged, added = merge_missing(
         ["# h\n", "1 # a\n", "5 # b\n"], {(0, 1): "x", (0, 3): "c", (1, "e@x.io"): ""}
     )
@@ -177,6 +204,9 @@ def main() -> None:
 
     lines = BLACKLIST.read_text(encoding="utf-8").splitlines(keepends=True)
     try:
+        key = entry_key(entry)
+        if not is_bannable(key):
+            sys.exit(f"{key[1]} is not a bannable Telegram ID")
         lines = add_entry(lines, entry, reason)
     except ValueError as e:
         sys.exit(str(e))
