@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Merge missing ids
+      - name: Merge missing ids and regenerate csv
         env:
           URL: ${{ inputs.url }}
         run: |
@@ -27,6 +27,9 @@ jobs:
             python3 scripts/add_ban.py --sync "$url"
           done
           python3 scripts/add_ban.py --check
+          python3 scripts/export_csv.py
+          python3 scripts/export_csv.py --check
+          python3 scripts/entries_badge.py
 
       - name: Open pull request
         env:
