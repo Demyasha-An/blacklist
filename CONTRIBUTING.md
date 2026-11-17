@@ -53,7 +53,15 @@ ok: 14843 entries, sorted, no duplicates
 
 На нарушение порядка — `out of order: N`, на повтор — `duplicates: N` и список адресов.
 
-Массовый импорт: `--sync <url|file>` добавляет только отсутствующие записи, повторный прогон даёт `added 0 entries`.
+Массовый импорт: `--sync <url|file>` добавляет только отсутствующие записи, повторный прогон даёт `added 0 entries`. Служебные аккаунты Telegram и ID больше 10^10 отбрасываются при разборе источника и попадают в вывод отдельной строкой:
+
+```console
+$ python3 scripts/add_ban.py --sync https://raw.githubusercontent.com/BEDOLAGA-DEV/VPN-BLACKLIST/main/blacklist.txt
+added 0 entries from 1213 in source
+skipped 2 not bannable: 55610547115, 777000
+```
+
+Те же значения не пройдут и через одиночное добавление — `777000 is not a bannable Telegram ID`.
 
 Самопроверка скрипта: `--selftest`.
 
@@ -97,7 +105,17 @@ blacklist.txt:3: duplicate of line 2: 2593769
 
 ### `sources.txt` и `sync`
 
-В `scripts/sources.txt` — URL внешних списков, по одному на строку. Workflow `Sync` раз в неделю (понедельник, 05:00 UTC) и по кнопке прогоняет `add_ban.py --sync` по каждому адресу и открывает PR из ветки `sync/upstream`. Причины у таких записей — от источника, перед мержем их стоит просмотреть.
+В `scripts/sources.txt` — URL внешних списков, по одному на строку. Workflow `Sync` раз в неделю (понедельник, 05:00 UTC) и по кнопке прогоняет `add_ban.py --sync` по каждому адресу, пересобирает `blacklist.csv` и `badges/entries.json` и открывает PR из ветки `sync/upstream`. Причины у таких записей — от источника, перед мержем их стоит просмотреть.
+
+В PR приезжают все четыре файла, поэтому проверка `export` на нём зелёная. Ветку `sync/upstream` workflow перезаписывает принудительно: если в открытом PR что-то не так, следующий прогон соберёт его заново из свежего `main`.
+
+PR создаёт `github-actions[bot]`, поэтому GitHub не запускает на нём проверки сам — прогоны висят в статусе `action_required`, пока мейнтейнер не нажмёт «Approve and run» на странице Actions или не одобрит через API:
+
+```console
+$ gh api -X POST repos/remnashop/blacklist/actions/runs/<run_id>/approve
+```
+
+Чтобы этого не делать, нужен PAT мейнтейнера в секрете и `token:` в `actions/checkout` — тогда PR создаётся от живого пользователя и проверки идут сразу.
 
 ## CI
 
@@ -106,7 +124,7 @@ blacklist.txt:3: duplicate of line 2: 2593769
 | `Check` | каждый push и PR | `add_ban.py --selftest`, затем `--check`: порядок, дубликаты, формат |
 | `export` | push в `main` (txt или скрипты) | пересобирает `blacklist.csv` и `badges/entries.json`, коммитит ботом, если что-то изменилось |
 | `export` | PR (txt, csv, скрипты) | только `export_csv.py --check`, файлы не пишет |
-| `Sync` | по расписанию и вручную | массовый импорт, PR из `sync/upstream` |
+| `Sync` | по расписанию и вручную | импорт из внешних списков, пересборка csv и бейджа, PR из `sync/upstream` |
 | `issue check` | открытие, правка, переоткрытие issue | закрывает заявку, если адрес уже в списке |
 
 Схема:
